@@ -1,0 +1,6 @@
+clean
+dirt_dot
+glare
+water
+grass_residue
+mud_film
