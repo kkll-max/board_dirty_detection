@@ -349,7 +349,7 @@ static void engine_close(Engine *e)
     if (e->lib) dlclose(e->lib);
 }
 
-/* ================================================= 输入拷贝（单列，不算预处理） */
+/* ================================================= 输入拷贝 */
 
 static void engine_fill_input(Engine *e, const uint8_t *nv12, double *ms)
 {
