@@ -1,0 +1,245 @@
+2026-11-18 10:34:43,100 file: tool_utils.py func: tool_utils line No: 77 log will be stored in /open_explorer/dirty1109/04/hb_mapper_checker.log
+2026-11-18 10:34:43,100 file: hb_mapper.py func: hb_mapper line No: 72 Start hb_mapper....
+2026-11-18 10:34:43,100 file: hb_mapper.py func: hb_mapper line No: 73 hbdk version 3.49.15
+2026-11-18 10:34:43,100 file: hb_mapper.py func: hb_mapper line No: 74 horizon_nn version 1.1.0
+2026-11-18 10:34:43,100 file: hb_mapper.py func: hb_mapper line No: 75 hb_mapper version 1.24.3
+2026-11-18 10:34:43,108 file: onnx_parser.py func: onnx_parser line No: 39 Model input names: ['images']
+2026-11-18 10:34:43,109 file: hb_mapper_checker.py func: hb_mapper_checker line No: 106 Model type: onnx
+2026-11-18 10:34:43,109 file: hb_mapper_checker.py func: hb_mapper_checker line No: 107 march: bayes-e
+2026-11-18 10:34:43,109 file: hb_mapper_checker.py func: hb_mapper_checker line No: 112 input names []
+2026-11-18 10:34:43,109 file: hb_mapper_checker.py func: hb_mapper_checker line No: 113 input shapes {}
+2026-11-18 10:34:43,109 file: hb_mapper_checker.py func: hb_mapper_checker line No: 119 Begin model checking....
+2026-11-18 10:34:43,120 file: model_builder.py func: model_builder line No: 35 Start to Horizon NN Model Convert.
+2026-11-18 10:34:43,178 file: model_debugger.py func: model_debugger line No: 67 Loading horizon_nn debug methods:set()
+2026-11-18 10:34:43,178 file: quantization_config.py func: quantization_config line No: 305 The activation calibration parameters:
+    calibration_type:     fixed
+2026-11-18 10:34:43,178 file: model_builder.py func: model_builder line No: 197 The specified model compilation architecture: bayes-e.
+2026-11-18 10:34:43,178 file: model_builder.py func: model_builder line No: 207 The specified model compilation optimization parameters: [].
+2026-11-18 10:34:43,179 file: model_builder.py func: model_builder line No: 35 Start to prepare the onnx model.
+2026-11-18 10:34:43,196 file: prepare.py func: prepare line No: 106 Input ONNX Model Information:
+ONNX IR version:          6
+Opset version:            ['ai.onnx v11', 'horizon v1']
+Producer:                 pytorch v2.6.0
+Domain:                   None
+Version:                  None
+Graph input:
+    images:               shape=[1, 3, 384, 640], dtype=FLOAT32
+Graph output:
+    output0:              shape=[1, 384, 640], dtype=UINT8
+2026-11-18 10:34:43,197 file: preprocess_for_convert.py func: preprocess_for_convert line No: 98 Modify argmax output element type from int32 to int64 to make sure this onnx model will be valid.
+2026-11-18 10:34:43,265 file: model_builder.py func: model_builder line No: 38 End to prepare the onnx model.
+2026-11-18 10:34:43,282 file: model_builder.py func: model_builder line No: 265 Saving model to: ./.hb_check/original_float_model.onnx.
+2026-11-18 10:34:43,282 file: model_builder.py func: model_builder line No: 35 Start to optimize the onnx model.
+2026-11-18 10:34:43,374 file: constant_folding.py func: constant_folding line No: 66 Summary info for constant_folding:
+2026-11-18 10:34:43,374 file: constant_folding.py func: constant_folding line No: 67   After constant_folding, the number of nodes has changed from 231 to 221.
+2026-11-18 10:34:43,374 file: constant_folding.py func: constant_folding line No: 71   After constant_folding, the number of parameters has changed from 1551975 to 1551975.
+2026-11-18 10:34:43,374 file: constant_folding.py func: constant_folding line No: 76 Detailed info for constant_folding:
+2026-11-18 10:34:43,374 file: constant_folding.py func: constant_folding line No: 88 
+2026-11-18 10:34:43,623 file: model_builder.py func: model_builder line No: 38 End to optimize the onnx model.
+2026-11-18 10:34:43,635 file: model_builder.py func: model_builder line No: 265 Saving model to: ./.hb_check/optimized_float_model.onnx.
+2026-11-18 10:34:43,635 file: model_builder.py func: model_builder line No: 35 Start to calibrate the model.
+2026-11-18 10:34:43,736 file: calibration_data_set.py func: calibration_data_set line No: 111 input name: images,  number_of_samples: 1
+2026-11-18 10:34:43,736 file: calibration_data_set.py func: calibration_data_set line No: 123 There are 1 samples in the data set.
+2026-11-18 10:34:43,736 file: fixed_calibrater.py func: fixed_calibrater line No: 31 Run calibration model with fixed thresholds method.
+2026-11-18 10:34:43,964 file: model_builder.py func: model_builder line No: 38 End to calibrate the model.
+2026-11-18 10:34:44,027 file: model_builder.py func: model_builder line No: 265 Saving model to: ./.hb_check/calibrated_model.onnx.
+2026-11-18 10:34:44,027 file: model_builder.py func: model_builder line No: 35 Start to quantize the model.
+2026-11-18 10:34:44,736 file: constant_folding.py func: constant_folding line No: 66 Summary info for constant_folding:
+2026-11-18 10:34:44,736 file: constant_folding.py func: constant_folding line No: 67   After constant_folding, the number of nodes has changed from 179 to 179.
+2026-11-18 10:34:44,736 file: constant_folding.py func: constant_folding line No: 71   After constant_folding, the number of parameters has changed from 1570820 to 1570820.
+2026-11-18 10:34:44,736 file: constant_folding.py func: constant_folding line No: 76 Detailed info for constant_folding:
+2026-11-18 10:34:44,736 file: constant_folding.py func: constant_folding line No: 88 
+2026-11-18 10:34:44,771 file: model_builder.py func: model_builder line No: 38 End to quantize the model.
+2026-11-18 10:34:44,808 file: model_builder.py func: model_builder line No: 265 Saving model to: ./.hb_check/quantized_model.onnx.
+2026-11-18 10:34:44,808 file: model_builder.py func: model_builder line No: 35 Start to compile the model with march bayes-e.
+2026-11-18 10:34:45,069 file: hybrid_build.py func: hybrid_build line No: 111 Compile submodel: main_graph_subgraph_0
+2026-11-18 10:34:45,077 file: hbdk_cc.py func: hbdk_cc line No: 126 hbdk-cc parameters:['--input-layout', 'NHWC', '--output-layout', 'NHWC']
+2026-11-18 10:34:45,077 file: hbdk_cc.py func: hbdk_cc line No: 127 hbdk-cc command used:hbdk-cc -f hbir -m /tmp/tmprmxsqgsp/main_graph_subgraph_0.hbir -o /tmp/tmprmxsqgsp/main_graph_subgraph_0.hbm --march bayes-e --progressbar --input-layout NHWC --output-layout NHWC
+2026-11-18 10:34:45,397 file: tool_utils.py func: tool_utils line No: 326 consumed time 0.285532
+2026-11-18 10:34:45,446 file: tool_utils.py func: tool_utils line No: 326 FPS=88.48, latency = 11301.6 us, DDR = 71459328 bytes   (see ./.hb_check/main_graph_subgraph_0.html)
+2026-11-18 10:34:45,448 file: hybrid_build.py func: hybrid_build line No: 111 Compile submodel: main_graph_subgraph_1
+2026-11-18 10:34:45,455 file: hbdk_cc.py func: hbdk_cc line No: 126 hbdk-cc parameters:['--input-layout', 'NHWC', '--output-layout', 'NHWC']
+2026-11-18 10:34:45,456 file: hbdk_cc.py func: hbdk_cc line No: 127 hbdk-cc command used:hbdk-cc -f hbir -m /tmp/tmprmxsqgsp/main_graph_subgraph_1.hbir -o /tmp/tmprmxsqgsp/main_graph_subgraph_1.hbm --march bayes-e --progressbar --input-layout NHWC --output-layout NHWC
+2026-11-18 10:34:45,624 file: tool_utils.py func: tool_utils line No: 326 consumed time 0.151843
+2026-11-18 10:34:45,654 file: tool_utils.py func: tool_utils line No: 326 FPS=106.64, latency = 9377.0 us, DDR = 57717952 bytes   (see ./.hb_check/main_graph_subgraph_1.html)
+2026-11-18 10:34:45,710 file: model_builder.py func: model_builder line No: 38 End to compile the model with march bayes-e.
+2026-11-18 10:34:45,714 file: print_info_dict.py func: print_info_dict line No: 72 The main quantized node information:
+===================================================================================================================================
+Node                                             ON   Subgraph  Type                       Cosine Similarity  Threshold  DataType  
+-----------------------------------------------------------------------------------------------------------------------------------
+/model.0/conv/Conv                               BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.0/act/Mul                                 BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.1/conv/Conv                               BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.1/act/Mul                                 BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.2/cv1/conv/Conv                           BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.2/cv1/act/Mul                             BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.2/Split                                   BPU  id(0)     Split                      --                 1.0        int8      
+/model.2/m.0/cv1/conv/Conv                       BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.2/m.0/cv1/act/Mul                         BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.2/m.0/cv2/conv/Conv                       BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.2/m.0/cv2/act/Mul                         BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.2/m.0/Add                                 BPU  id(0)     HzSElementwiseAdd          --                 1.0        int8      
+/model.2/Concat                                  BPU  id(0)     Concat                     --                 1.0        int8      
+/model.2/cv2/conv/Conv                           BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.2/cv2/act/Mul                             BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.3/conv/Conv                               BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.3/act/Mul                                 BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.4/cv1/conv/Conv                           BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.4/cv1/act/Mul                             BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.4/Split                                   BPU  id(0)     Split                      --                 1.0        int8      
+/model.4/m.0/cv1/conv/Conv                       BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.4/m.0/cv1/act/Mul                         BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.4/m.0/cv2/conv/Conv                       BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.4/m.0/cv2/act/Mul                         BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.4/m.0/Add                                 BPU  id(0)     HzSElementwiseAdd          --                 1.0        int8      
+/model.4/Concat                                  BPU  id(0)     Concat                     --                 1.0        int8      
+/model.4/cv2/conv/Conv                           BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.4/cv2/act/Mul                             BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.5/conv/Conv                               BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.5/act/Mul                                 BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.6/cv1/conv/Conv                           BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.6/cv1/act/Mul                             BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.6/Split                                   BPU  id(0)     Split                      --                 1.0        int8      
+/model.6/m.0/cv1/conv/Conv                       BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.6/m.0/cv1/act/Mul                         BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.6/m.0/m/m.0/cv1/conv/Conv                 BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.6/m.0/m/m.0/cv1/act/Mul                   BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.6/m.0/m/m.0/cv2/conv/Conv                 BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.6/m.0/m/m.0/cv2/act/Mul                   BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.6/m.0/m/m.0/Add                           BPU  id(0)     HzSElementwiseAdd          --                 1.0        int8      
+/model.6/m.0/m/m.1/cv1/conv/Conv                 BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.6/m.0/m/m.1/cv1/act/Mul                   BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.6/m.0/m/m.1/cv2/conv/Conv                 BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.6/m.0/m/m.1/cv2/act/Mul                   BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.6/m.0/m/m.1/Add                           BPU  id(0)     HzSElementwiseAdd          --                 1.0        int8      
+/model.6/m.0/cv2/conv/Conv                       BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.6/m.0/cv2/act/Mul                         BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.6/m.0/Concat                              BPU  id(0)     Concat                     --                 1.0        int8      
+/model.6/m.0/cv3/conv/Conv                       BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.6/m.0/cv3/act/Mul                         BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.6/Concat                                  BPU  id(0)     Concat                     --                 1.0        int8      
+/model.6/cv2/conv/Conv                           BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.6/cv2/act/Mul                             BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.7/conv/Conv                               BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.7/act/Mul                                 BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.8/cv1/conv/Conv                           BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.8/cv1/act/Mul                             BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.8/Split                                   BPU  id(0)     Split                      --                 1.0        int8      
+/model.8/m.0/cv1/conv/Conv                       BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.8/m.0/cv1/act/Mul                         BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.8/m.0/m/m.0/cv1/conv/Conv                 BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.8/m.0/m/m.0/cv1/act/Mul                   BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.8/m.0/m/m.0/cv2/conv/Conv                 BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.8/m.0/m/m.0/cv2/act/Mul                   BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.8/m.0/m/m.0/Add                           BPU  id(0)     HzSElementwiseAdd          --                 1.0        int8      
+/model.8/m.0/m/m.1/cv1/conv/Conv                 BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.8/m.0/m/m.1/cv1/act/Mul                   BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.8/m.0/m/m.1/cv2/conv/Conv                 BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.8/m.0/m/m.1/cv2/act/Mul                   BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.8/m.0/m/m.1/Add                           BPU  id(0)     HzSElementwiseAdd          --                 1.0        int8      
+/model.8/m.0/cv2/conv/Conv                       BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.8/m.0/cv2/act/Mul                         BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.8/m.0/Concat                              BPU  id(0)     Concat                     --                 1.0        int8      
+/model.8/m.0/cv3/conv/Conv                       BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.8/m.0/cv3/act/Mul                         BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.8/Concat                                  BPU  id(0)     Concat                     --                 1.0        int8      
+/model.8/cv2/conv/Conv                           BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.8/cv2/act/Mul                             BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.9/cv1/conv/Conv                           BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.9/m/MaxPool                               BPU  id(0)     HzQuantizedMaxPool         --                 1.0        int8      
+/model.9/m_1/MaxPool                             BPU  id(0)     HzQuantizedMaxPool         --                 1.0        int8      
+/model.9/m_2/MaxPool                             BPU  id(0)     HzQuantizedMaxPool         --                 1.0        int8      
+/model.9/Concat                                  BPU  id(0)     Concat                     --                 1.0        int8      
+/model.9/cv2/conv/Conv                           BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.9/cv2/act/Mul                             BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.9/Add                                     BPU  id(0)     HzSElementwiseAdd          --                 1.0        int8      
+/model.10/cv1/conv/Conv                          BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.10/cv1/act/Mul                            BPU  id(0)     HzLut                      --                 1.0        int8      
+/model.10/Split                                  BPU  id(0)     Split                      --                 1.0        int8      
+/model.10/m/m.0/attn/qkv/conv/Conv               BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.10/m/m.0/attn/Reshape                     BPU  id(0)     Reshape                    --                 1.0        int8      
+/model.10/m/m.0/attn/Split                       BPU  id(0)     Split                      --                 1.0        int8      
+/model.10/m/m.0/attn/Mul                         BPU  id(0)     HzSQuantizedConv           --                 1.0        int8      
+/model.10/m/m.0/attn/Transpose                   BPU  id(0)     Transpose                  --                 1.0        int8      
+/model.10/m/m.0/attn/MatMul                      BPU  id(0)     HzSQuantizedMatmul         --                 1.0        int8      
+/model.10/m/m.0/attn/Softmax                     CPU  --        Softmax                    --                 --         float     
+/model.10/m/m.0/attn/Transpose_1                 BPU  id(1)     Transpose                  --                 --         int8      
+/model.10/m/m.0/attn/MatMul_1                    BPU  id(1)     HzSQuantizedMatmul         --                 1.0        int8      
+/model.10/m/m.0/attn/Reshape_1                   BPU  id(1)     Reshape                    --                 1.0        int8      
+/model.10/m/m.0/attn/Reshape_2                   BPU  id(0)     Reshape                    --                 1.0        int8      
+/model.10/m/m.0/attn/pe/conv/Conv                BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.10/m/m.0/attn/proj/conv/Conv              BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.10/m/m.0/ffn/ffn.0/conv/Conv              BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.10/m/m.0/ffn/ffn.0/act/Mul                BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.10/m/m.0/ffn/ffn.1/conv/Conv              BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.10/Concat                                 BPU  id(1)     Concat                     --                 1.0        int8      
+/model.10/cv2/conv/Conv                          BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.10/cv2/act/Mul                            BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.11/Resize                                 BPU  id(1)     HzQuantizedResizeUpsample  --                 0.731059   int8      
+/model.11/Resize_output_0_calibrated_Requantize  BPU  id(1)     HzRequantize               --                 --         int8      
+/model.12/Concat                                 BPU  id(1)     Concat                     --                 0.731059   int8      
+/model.13/cv1/conv/Conv                          BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.13/cv1/act/Mul                            BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.13/Split                                  BPU  id(1)     Split                      --                 1.0        int8      
+/model.13/m.0/cv1/conv/Conv                      BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.13/m.0/cv1/act/Mul                        BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.13/m.0/m/m.0/cv1/conv/Conv                BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.13/m.0/m/m.0/cv1/act/Mul                  BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.13/m.0/m/m.0/cv2/conv/Conv                BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.13/m.0/m/m.0/cv2/act/Mul                  BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.13/m.0/m/m.0/Add                          BPU  id(1)     HzSElementwiseAdd          --                 1.0        int8      
+/model.13/m.0/m/m.1/cv1/conv/Conv                BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.13/m.0/m/m.1/cv1/act/Mul                  BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.13/m.0/m/m.1/cv2/conv/Conv                BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.13/m.0/m/m.1/cv2/act/Mul                  BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.13/m.0/m/m.1/Add                          BPU  id(1)     HzSElementwiseAdd          --                 1.0        int8      
+/model.13/m.0/cv2/conv/Conv                      BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.13/m.0/cv2/act/Mul                        BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.13/m.0/Concat                             BPU  id(1)     Concat                     --                 1.0        int8      
+/model.13/m.0/cv3/conv/Conv                      BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.13/m.0/cv3/act/Mul                        BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.13/Concat                                 BPU  id(1)     Concat                     --                 1.0        int8      
+/model.13/cv2/conv/Conv                          BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.13/cv2/act/Mul                            BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.14/Resize                                 BPU  id(1)     HzQuantizedResizeUpsample  --                 0.731059   int8      
+/model.14/Resize_output_0_calibrated_Requantize  BPU  id(1)     HzRequantize               --                 --         int8      
+/model.15/Concat                                 BPU  id(1)     Concat                     --                 0.731059   int8      
+/model.16/cv1/conv/Conv                          BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.16/cv1/act/Mul                            BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.16/Split                                  BPU  id(1)     Split                      --                 1.0        int8      
+/model.16/m.0/cv1/conv/Conv                      BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.16/m.0/cv1/act/Mul                        BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.16/m.0/m/m.0/cv1/conv/Conv                BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.16/m.0/m/m.0/cv1/act/Mul                  BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.16/m.0/m/m.0/cv2/conv/Conv                BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.16/m.0/m/m.0/cv2/act/Mul                  BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.16/m.0/m/m.0/Add                          BPU  id(1)     HzSElementwiseAdd          --                 1.0        int8      
+/model.16/m.0/m/m.1/cv1/conv/Conv                BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.16/m.0/m/m.1/cv1/act/Mul                  BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.16/m.0/m/m.1/cv2/conv/Conv                BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.16/m.0/m/m.1/cv2/act/Mul                  BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.16/m.0/m/m.1/Add                          BPU  id(1)     HzSElementwiseAdd          --                 1.0        int8      
+/model.16/m.0/cv2/conv/Conv                      BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.16/m.0/cv2/act/Mul                        BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.16/m.0/Concat                             BPU  id(1)     Concat                     --                 1.0        int8      
+/model.16/m.0/cv3/conv/Conv                      BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.16/m.0/cv3/act/Mul                        BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.16/Concat                                 BPU  id(1)     Concat                     --                 1.0        int8      
+/model.16/cv2/conv/Conv                          BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.16/cv2/act/Mul                            BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.17/classifier/classifier.0/conv/Conv      BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.17/classifier/classifier.0/act/Mul        BPU  id(1)     HzLut                      --                 1.0        int8      
+/model.17/classifier/classifier.1/Conv           BPU  id(1)     HzSQuantizedConv           --                 1.0        int8      
+/model.17/Resize                                 BPU  id(1)     HzQuantizedRoiResize       --                 1.0        int8      
+/model.17/ArgMax                                 BPU  id(1)     HzQuantizedArgMax          --                 1.0        int8      
+/model.17/ArgMax_cast                            CPU  --        Cast                       --                 --         int8      
+/model.17/ArgMax_output_reshape                  CPU  --        Reshape                    --                 --         int64     
+/model.17/Cast                                   CPU  --        Cast                       --                 --         int64
+2026-11-18 10:34:45,715 file: print_info_dict.py func: print_info_dict line No: 72 The quantized model output:
+============
+Output      
+------------
+2026-11-18 10:34:45,718 file: model_builder.py func: model_builder line No: 38 End to Horizon NN Model Convert.
+2026-11-18 10:34:45,718 file: onnx2horizonrt.py func: onnx2horizonrt line No: 4326 ONNX model output num : 1
+2026-11-18 10:34:45,719 file: onnx2horizonrt.py func: onnx2horizonrt line No: 4060 model_deps_info: {'hb_mapper_version': '1.24.3'}
+2026-11-18 10:34:45,721 file: hb_mapper_checker.py func: hb_mapper_checker line No: 170 End model checking....
