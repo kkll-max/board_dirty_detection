@@ -323,6 +323,3 @@ nohup taskset -c 5,7 ./bin/stream_server --watch temp/cctest --port 8082 \
 # 往 temp/cctest 丢一张 640x448 PNG，再读 http://127.0.0.1:8082/status.json
 # 看 n_region/regions，抓 /snapshot.jpg 核对框的位置和颜色
 ```
-
-  临时实例不要加 `--consume`，否则会把自测图片删掉；也不要和 8080 的正式
-  实例用同一个 watch 目录。
