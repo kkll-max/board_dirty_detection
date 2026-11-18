@@ -20,7 +20,9 @@
  * HTTP 接口：
  *   GET /               HTML 预览页（<img src="/stream.mjpg">）
  *   GET /stream.mjpg    multipart/x-mixed-replace MJPEG 流（多客户端）
- *   GET /status.json    {seq,width,height,pub_width,fps,frames,jpeg_bytes,source}
+ *   GET /status.json    {seq,width,height,pub_width,fps,frames,jpeg_bytes,source,
+ *                        infer,dirty,cls_ratio,fg_ratio,infer_ms,
+ *                        n_region,regions:[{cls,x,y,w,h,area},...]}
  *   GET /snapshot.jpg   最新一帧 JPEG
  *   GET /infer?on=0|1   网页开关：实时推理并叠加 / 仅推流
  *   GET /res?w=N        网页切换推流宽度：0 = 原始尺寸，否则等比缩到 N 宽
@@ -106,6 +108,11 @@
 /* 两张脏污对比图的最小间隔（ms）：0 = 每脏污帧都存。三联图 JPEG 编码 +
  * eMMC 写入约 50~80 ms，逐帧保存会把推流卡到 5 fps 以下、网页延迟变大。 */
 #define DEFAULT_SAVE_INTERVAL_MS 1000
+/* 脏污连通域：在 640x384 类别图上做 8 邻域连通域分析，面积小于
+ * SEG_REGION_MIN_PX（模型像素）的当噪点丢掉；状态接口/网页最多给出
+ * SEG_MAX_REGIONS 个（按面积从大到小）。 */
+#define SEG_MAX_REGIONS 16
+#define SEG_REGION_MIN_PX 16
 #define DEFAULT_RECORD_DIR "/userdata/iris/on_time"
 #define DEFAULT_RECORD_MAX 100    /* -a/-b 默认最多保留的帧数 */
 #define RECORD_MIN_FREE_MB 200.0  /* 剩余空间低于此值自动停止录制 */
@@ -234,6 +241,14 @@ static int encode_jpeg(const uint8_t *rgb, int w, int h, int quality, Buffer *ou
 
 /* ------------------------------------------------------------ 帧状态中心 */
 
+/* 脏污连通域：坐标已映射回原始帧像素（x/y 为包围盒左上角，w/h 为宽高），
+ * area 是连通域在模型网格上的像素数（640x384 坐标）。 */
+typedef struct {
+    int cls;
+    int x, y, w, h;
+    long area;
+} SegRegion;
+
 /* 本帧的分割结果（--model 开启时由 process_png 填充） */
 typedef struct {
     int enabled;        /* 1 = 这张图跑了模型 */
@@ -245,6 +260,8 @@ typedef struct {
     double fg_ratio;     /* 0..100，class1..n-1 合计占比 */
     double cls_ratio[SEG_MAX_CLASSES]; /* 各类像素占比 0..100 */
     double infer_ms;
+    int n_region;                          /* 连通域个数（最多 SEG_MAX_REGIONS） */
+    SegRegion region[SEG_MAX_REGIONS];     /* 按面积从大到小 */
 } InferInfo;
 
 typedef struct {
@@ -274,6 +291,8 @@ typedef struct {
     double fg_ratio;            /* 所有脏污类合计占比 0..100 */
     double cls_ratio[SEG_MAX_CLASSES];
     double infer_ms;            /* 单帧推理（含预处理）耗时 */
+    int n_region;               /* 脏污连通域个数 */
+    SegRegion region[SEG_MAX_REGIONS];
     int quit;
 } FrameHub;
 
@@ -348,6 +367,8 @@ static void hub_publish(FrameHub *h, const unsigned char *jpeg, size_t len,
         h->fg_ratio = inf->fg_ratio;
         memcpy(h->cls_ratio, inf->cls_ratio, sizeof(h->cls_ratio));
         h->infer_ms = inf->infer_ms;
+        h->n_region = inf->n_region;
+        memcpy(h->region, inf->region, sizeof(h->region));
     } else {
         h->infer = 0;
         h->dirty = 0;
@@ -355,6 +376,7 @@ static void hub_publish(FrameHub *h, const unsigned char *jpeg, size_t len,
         h->fg_ratio = 0;
         memset(h->cls_ratio, 0, sizeof(h->cls_ratio));
         h->infer_ms = 0;
+        h->n_region = 0;
     }
     h->win_frames++;
     if (h->win_start <= 0)
@@ -518,7 +540,7 @@ static const char PAGE_HTML[] =
     ".then(function(r){return r.json();}).then(function(j){"
     "st.textContent=j.width+'x'+j.height+'  '+j.fps.toFixed(1)+' fps  帧 '"
     "+j.seq+(j.infer_on?('  脏污:'+(j.dirty?('是 '+j.fg_ratio.toFixed(1)+'%')"
-    ":'否')):'')+'  '+j.source;"
+    ":'否')):'')+(j.infer_on?('  区域 '+(j.n_region||0)):'')+'  '+j.source;"
     "hasModel=!!j.has_model;inferOn=!!j.infer_on;updateInfBtn();"
     "updateRatios(j);syncRes(j.pub_width);"
     "if(j.seq>0)err.style.display='none';}).catch(function(){});},500);\n"
@@ -1133,7 +1155,8 @@ static void send_status(int fd, FrameHub *hub)
 {
     char src[2 * sizeof(hub->source) + 1];
     char ratios[SEG_MAX_CLASSES * 12 + 2];
-    char body[1400];
+    char regs[SEG_MAX_REGIONS * 72 + 4];
+    char body[4096];
     const int infer_on = __atomic_load_n(&hub->infer_on, __ATOMIC_RELAXED);
     pthread_mutex_lock(&hub->mu);
     json_escape(hub->source, src, sizeof(src));
@@ -1152,6 +1175,22 @@ static void send_status(int fd, FrameHub *hub)
     }
     ratios[rl++] = ']';
     ratios[rl] = 0;
+    /* 脏污连通域：坐标是原始帧像素（x/y 左上角，w/h 宽高），area 是模型
+     * 网格上的像素数，按面积从大到小 */
+    int gl = 0;
+    regs[gl++] = '[';
+    for (int i = 0; i < hub->n_region && i < SEG_MAX_REGIONS; ++i) {
+        const SegRegion *r = &hub->region[i];
+        int w = snprintf(regs + gl, sizeof(regs) - (size_t)gl,
+                         "%s{\"cls\":%d,\"x\":%d,\"y\":%d,\"w\":%d,\"h\":%d,"
+                         "\"area\":%ld}",
+                         i ? "," : "", r->cls, r->x, r->y, r->w, r->h, r->area);
+        if (w < 0 || (size_t)(gl + w) >= sizeof(regs))
+            break;
+        gl += w;
+    }
+    regs[gl++] = ']';
+    regs[gl] = 0;
     const int pub_width = __atomic_load_n(&g_pub_width, __ATOMIC_RELAXED);
     int n = snprintf(body, sizeof(body),
                      "{\"seq\":%lu,\"width\":%d,\"height\":%d,\"pub_width\":%d,"
@@ -1160,7 +1199,8 @@ static void send_status(int fd, FrameHub *hub)
                      "\"infer\":%s,\"infer_on\":%s,\"has_model\":%s,"
                      "\"dirty\":%s,\"n_class\":%d,\"cls_ratio\":%s,"
                      "\"target_class\":%d,\"target_ratio\":%.2f,"
-                     "\"fg_ratio\":%.2f,\"infer_ms\":%.1f}\n",
+                     "\"fg_ratio\":%.2f,\"infer_ms\":%.1f,"
+                     "\"n_region\":%d,\"regions\":%s}\n",
                      hub->seq, hub->width, hub->height, pub_width, fps,
                      hub->frames, hub->jpeg_len, src,
                      hub->infer ? "true" : "false",
@@ -1168,7 +1208,7 @@ static void send_status(int fd, FrameHub *hub)
                      hub->has_model ? "true" : "false",
                      hub->dirty ? "true" : "false", hub->n_class, ratios,
                      hub->target_class, hub->target_ratio, hub->fg_ratio,
-                     hub->infer_ms);
+                     hub->infer_ms, hub->n_region, regs);
     pthread_mutex_unlock(&hub->mu);
     if (n < 0)
         n = 0;
@@ -1667,6 +1707,9 @@ typedef struct {
     double last_rec_log;
     uint8_t *nv12;           /* mw*mh*3/2 临时输入 */
     uint8_t *labels;         /* mw*mh 类别图 */
+    int region_min_px;       /* 连通域最小面积（模型像素），更小的当噪点 */
+    uint8_t *cc_vis;         /* mw*mh，连通域 BFS 访问标记 */
+    int *cc_stk;             /* mw*mh，BFS 栈（像素线性下标） */
 } SegEngine;
 
 #define SEG_LOAD_SYM(e, name)                                                    \
@@ -1979,13 +2022,15 @@ static void seg_load_labels(SegEngine *e, const char *labels_path,
 
 static int seg_open(SegEngine *e, const char *model_path,
                     const char *labels_path, int target_class,
-                    double dirty_ratio, const char *save_dir, int save_max,
+                    double dirty_ratio, int region_min_px,
+                    const char *save_dir, int save_max,
                     int save_interval_ms, const char *rec_dir, int rec_max,
                     int rec_dirty_only)
 {
     memset(e, 0, sizeof(*e));
     e->target_class = target_class;
     e->dirty_ratio = dirty_ratio;
+    e->region_min_px = region_min_px < 0 ? 0 : region_min_px;
     e->save_max = save_max;
     e->save_interval_ms = save_interval_ms;
     if (save_dir && save_dir[0] && save_max > 0) {
@@ -2097,7 +2142,10 @@ static int seg_open(SegEngine *e, const char *model_path,
     e->outputs = (hbDNNTensor *)calloc((size_t)e->output_count, sizeof(hbDNNTensor));
     e->nv12 = (uint8_t *)malloc((size_t)e->mw * e->mh * 3 / 2);
     e->labels = (uint8_t *)malloc((size_t)e->mw * e->mh);
-    if (!e->out_props || !e->outputs || !e->nv12 || !e->labels) {
+    e->cc_vis = (uint8_t *)malloc((size_t)e->mw * e->mh);
+    e->cc_stk = (int *)malloc((size_t)e->mw * e->mh * sizeof(int));
+    if (!e->out_props || !e->outputs || !e->nv12 || !e->labels ||
+        !e->cc_vis || !e->cc_stk) {
         logmsg("内存不足");
         return -1;
     }
@@ -2130,9 +2178,9 @@ static int seg_open(SegEngine *e, const char *model_path,
     e->dtype_s8 = (t == HB_DNN_TENSOR_TYPE_S8);
 
     logmsg("模型: %s (%s), 输入 %dx%d NV12, %d 类, 目标类 %d(%s), "
-           "脏污合计阈值 %.2f%%",
+           "脏污合计阈值 %.2f%%, 连通域最小 %d px",
            names[0], model_path, e->mw, e->mh, e->n_class, e->target_class,
-           e->cls_name[e->target_class], e->dirty_ratio);
+           e->cls_name[e->target_class], e->dirty_ratio, e->region_min_px);
     if (e->save_dir[0] && e->save_interval_ms > 0)
         logmsg("脏污对比图: %s（最多 %d 张，超出删最旧，最小间隔 %d ms）",
                e->save_dir, e->save_max, e->save_interval_ms);
@@ -2166,6 +2214,8 @@ static void seg_close(SegEngine *e)
     free(e->out_props);
     free(e->nv12);
     free(e->labels);
+    free(e->cc_vis);
+    free(e->cc_stk);
     if (e->lib)
         dlclose(e->lib);
     memset(e, 0, sizeof(*e));
@@ -2366,6 +2416,140 @@ static void seg_draw_banner(uint8_t *rgb, int W, int H, const char *text)
     seg_draw_text(rgb, W, H, 8 + pad, 8 + pad, text, scale);
 }
 
+/* --- 脏污连通域：8 邻域 BFS，统计面积和包围盒 --------------------------- */
+
+/* 按面积从大到小插进固定长度数组（超出 SEG_MAX_REGIONS 的丢掉） */
+static void seg_cc_insert(SegRegion *arr, int *n, const SegRegion *r)
+{
+    int pos = *n;
+    while (pos > 0 && arr[pos - 1].area < r->area)
+        --pos;
+    if (pos >= SEG_MAX_REGIONS)
+        return;
+    if (*n < SEG_MAX_REGIONS)
+        ++*n;
+    memmove(&arr[pos + 1], &arr[pos],
+            (size_t)(*n - 1 - pos) * sizeof(*arr));
+    arr[pos] = *r;
+}
+
+/* 在模型网格上找脏污连通域（class>=1 且同一类才算连在一起），把包围盒
+ * 映射回原图坐标后写进 info->region（按面积从大到小，最多 SEG_MAX_REGIONS 个）。
+ * 小面积（< region_min_px 模型像素）的当噪声丢弃。 */
+static void seg_find_regions(SegEngine *e, const SegGeom *g, InferInfo *info)
+{
+    info->n_region = 0;
+    const int mw = e->mw, mh = e->mh;
+    if (!e->cc_vis || !e->cc_stk || mw <= 0 || mh <= 0 || e->region_min_px < 0 ||
+        g->scale <= 0.0 || g->cw <= 0 || g->ch <= 0)
+        return;
+
+    memset(e->cc_vis, 0, (size_t)mw * mh);
+    SegRegion best[SEG_MAX_REGIONS];
+    int nbest = 0;
+    static const int dx[8] = {-1, 0, 1, -1, 1, -1, 0, 1};
+    static const int dy[8] = {-1, -1, -1, 0, 0, 1, 1, 1};
+
+    for (int sy = 0; sy < mh; ++sy) {
+        for (int sx = 0; sx < mw; ++sx) {
+            const long start = (long)sy * mw + sx;
+            const uint8_t cls = e->labels[start];
+            if (cls == 0 || cls >= e->n_class || e->cc_vis[start])
+                continue;
+
+            int sp = 0;
+            e->cc_stk[sp++] = (int)start;
+            e->cc_vis[start] = 1;
+            long area = 0;
+            int x0 = sx, x1 = sx, y0 = sy, y1 = sy;
+            while (sp > 0) {
+                const int idx = e->cc_stk[--sp];
+                const int x = idx % mw, y = idx / mw;
+                ++area;
+                if (x < x0) x0 = x;
+                if (x > x1) x1 = x;
+                if (y < y0) y0 = y;
+                if (y > y1) y1 = y;
+                for (int k = 0; k < 8; ++k) {
+                    const int nx = x + dx[k], ny = y + dy[k];
+                    if (nx < 0 || nx >= mw || ny < 0 || ny >= mh)
+                        continue;
+                    const long ni = (long)ny * mw + nx;
+                    if (e->cc_vis[ni] || e->labels[ni] != cls)
+                        continue;
+                    e->cc_vis[ni] = 1;
+                    e->cc_stk[sp++] = (int)ni;
+                }
+            }
+            if (area < e->region_min_px)
+                continue;
+
+            /* 模型像素 -> 原图像素：反演 seg_overlay 的映射
+             * x = (x0 + mx*cw/mw) / scale */
+            const double sx0 = (g->x0 + (double)x0 * g->cw / mw) / g->scale;
+            const double sx1 =
+                (g->x0 + (double)(x1 + 1) * g->cw / mw) / g->scale;
+            const double sy0 = (g->y0 + (double)y0 * g->ch / mh) / g->scale;
+            const double sy1 =
+                (g->y0 + (double)(y1 + 1) * g->ch / mh) / g->scale;
+            int wx0 = (int)(sx0 + 0.5), wx1 = (int)(sx1 + 0.5);
+            int wy0 = (int)(sy0 + 0.5), wy1 = (int)(sy1 + 0.5);
+            if (wx1 <= wx0) wx1 = wx0 + 1;
+            if (wy1 <= wy0) wy1 = wy0 + 1;
+
+            SegRegion r;
+            memset(&r, 0, sizeof(r));
+            r.cls = cls;
+            r.area = area;
+            r.x = wx0;
+            r.y = wy0;
+            r.w = wx1 - wx0;
+            r.h = wy1 - wy0;
+            seg_cc_insert(best, &nbest, &r);
+        }
+    }
+    info->n_region = nbest;
+    if (nbest > 0)
+        memcpy(info->region, best, (size_t)nbest * sizeof(best[0]));
+}
+
+/* 画矩形边框（向内 t 像素），坐标越界自动裁剪 */
+static void seg_rect_border(uint8_t *rgb, int W, int H, int x0, int y0, int x1,
+                            int y1, const uint8_t c[3], int t)
+{
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > W) x1 = W;
+    if (y1 > H) y1 = H;
+    if (x1 <= x0 || y1 <= y0)
+        return;
+    if (t > (x1 - x0)) t = x1 - x0;
+    if (t > (y1 - y0)) t = y1 - y0;
+    if (t < 1)
+        return;
+    seg_fill_rect(rgb, W, H, x0, y0, x1, y0 + t, c);
+    seg_fill_rect(rgb, W, H, x0, y1 - t, x1, y1, c);
+    seg_fill_rect(rgb, W, H, x0, y0, x0 + t, y1, c);
+    seg_fill_rect(rgb, W, H, x1 - t, y0, x1, y1, c);
+}
+
+/* 把连通域包围盒画到画面上：外层 1px 黑、内层 2px 类别色，深色/浅色背景
+ * 都看得清。只画 info->region 里的前 n_region 个。 */
+static void seg_draw_regions(uint8_t *rgb, int W, int H, const InferInfo *info)
+{
+    static const uint8_t black[3] = {0, 0, 0};
+    for (int i = 0; i < info->n_region && i < SEG_MAX_REGIONS; ++i) {
+        const SegRegion *r = &info->region[i];
+        if (r->cls <= 0 || r->cls >= SEG_MAX_CLASSES || r->w <= 0 || r->h <= 0)
+            continue;
+        int x0 = r->x, y0 = r->y, x1 = r->x + r->w, y1 = r->y + r->h;
+        if (x1 <= 0 || y1 <= 0 || x0 >= W || y0 >= H)
+            continue;
+        seg_rect_border(rgb, W, H, x0 - 1, y0 - 1, x1 + 1, y1 + 1, black, 1);
+        seg_rect_border(rgb, W, H, x0, y0, x1, y1, SEG_PALETTE_RGB[r->cls], 2);
+    }
+}
+
 /* 与 test.py / infer_board.c 的 save_visualization 一致：
  * 所有前景类（label > 0）按各自调色板颜色做 50% 混合，背景保持原样。
  * mask_out 非空时顺带画出纯色掩码图（三联图的中间那张）。 */
@@ -2411,8 +2595,11 @@ static void seg_overlay(const uint8_t *labels, const SegGeom *g, uint8_t *rgb,
         }
     }
 
+    seg_draw_regions(rgb, W, H, info);
+
     char banner[64];
-    snprintf(banner, sizeof(banner), "LENS DIRTY  %.1f%%", info->fg_ratio);
+    snprintf(banner, sizeof(banner), "LENS DIRTY  %.1f%%  N=%d", info->fg_ratio,
+             info->n_region);
     seg_draw_banner(rgb, W, H, banner);
 }
 
@@ -2733,6 +2920,7 @@ static int seg_process(SegEngine *e, uint8_t *rgb, int w, int h, InferInfo *info
     for (int k = 0; k < e->n_class; ++k)
         info->cls_ratio[k] = (double)cnt[k] * 100.0 / (double)px;
     info->dirty = info->fg_ratio >= e->dirty_ratio;
+    seg_find_regions(e, &g, info);
     info->infer_ms = now_ms() - t0;
 
     if (info->dirty)
@@ -3471,6 +3659,8 @@ static void usage(FILE *f)
         "  --target-class N   主目标类别（默认 %d，只影响 target_ratio）\n"
         "  --dirty-ratio PCT  判定脏污的所有脏污类（class>=1）合计面积占比\n"
         "                     阈值，单位 %%（默认 %.2f）\n"
+        "  --region-min-px N  脏污连通域最小面积（模型像素，默认 %d），更小的\n"
+        "                     当噪点丢掉；网页/状态最多给出 %d 个连通域\n"
         "  --save-dir PATH    脏污帧保存目录（默认 %s）：把「原图 | 掩码 |\n"
         "                     叠加图」三联图横向拼成一张 JPG（同 test.py）\n"
         "  --save-max N       保存目录内最多保留 N 张，超出删 mtime 最旧的一张；\n"
@@ -3509,6 +3699,7 @@ static void usage(FILE *f)
         "/app/data/metoak/3rdparty_libs/metoak_libs \\\n"
         "    ./stream_server --camera\n",
         PROG, PROG, DEFAULT_TARGET_CLASS, DEFAULT_DIRTY_RATIO,
+        SEG_REGION_MIN_PX, SEG_MAX_REGIONS,
         DEFAULT_SAVE_DIR, DEFAULT_SAVE_MAX, DEFAULT_SAVE_INTERVAL_MS,
         DEFAULT_RECORD_MAX,
         DEFAULT_RECORD_MAX, DEFAULT_RECORD_DIR,
@@ -3529,6 +3720,7 @@ int main(int argc, char **argv)
     int pub_width = DEFAULT_PUB_WIDTH;
     int target_class = DEFAULT_TARGET_CLASS;
     double dirty_ratio = DEFAULT_DIRTY_RATIO;
+    int region_min_px = SEG_REGION_MIN_PX;
     const char *save_dir = DEFAULT_SAVE_DIR;
     int save_max = DEFAULT_SAVE_MAX;
     int save_interval_ms = DEFAULT_SAVE_INTERVAL_MS;
@@ -3553,6 +3745,7 @@ int main(int argc, char **argv)
         { "labels", required_argument, 0, 'L' },
         { "target-class", required_argument, 0, 'T' },
         { "dirty-ratio", required_argument, 0, 'D' },
+        { "region-min-px", required_argument, 0, 'G' },
         { "save-dir", required_argument, 0, 'd' },
         { "save-max", required_argument, 0, 'M' },
         { "save-interval", required_argument, 0, 'i' },
@@ -3603,7 +3796,7 @@ int main(int argc, char **argv)
     argv = fargv;
 
     int c;
-    while ((c = getopt_long(argc, argv, "w:cC:S:RY:kPp:f:q:W:m:L:T:D:d:M:i:A:h",
+    while ((c = getopt_long(argc, argv, "w:cC:S:RY:kPp:f:q:W:m:L:T:D:G:d:M:i:A:h",
                             opts,
                             NULL)) != -1) {
         switch (c) {
@@ -3623,6 +3816,7 @@ int main(int argc, char **argv)
         case 'L': labels = optarg; break;
         case 'T': target_class = atoi(optarg); break;
         case 'D': dirty_ratio = atof(optarg); break;
+        case 'G': region_min_px = atoi(optarg); break;
         case 'd': save_dir = optarg; break;
         case 'M': save_max = atoi(optarg); break;
         case 'i': save_interval_ms = atoi(optarg); break;
@@ -3708,6 +3902,10 @@ int main(int argc, char **argv)
             fprintf(stderr, "%s: --dirty-ratio 必须在 0..100 之间\n", PROG);
             return 2;
         }
+        if (region_min_px < 0 || region_min_px > 100000) {
+            fprintf(stderr, "%s: --region-min-px 必须在 0..100000 之间\n", PROG);
+            return 2;
+        }
     }
 
     signal(SIGPIPE, SIG_IGN);
@@ -3726,8 +3924,8 @@ int main(int argc, char **argv)
     SegEngine seg;
     SegEngine *segp = NULL;
     if (model) {
-        if (seg_open(&seg, model, labels, target_class, dirty_ratio, save_dir,
-                     save_max, save_interval_ms,
+        if (seg_open(&seg, model, labels, target_class, dirty_ratio,
+                     region_min_px, save_dir, save_max, save_interval_ms,
                      record_mode ? record_dir : NULL, record_max,
                      record_mode == 'b') != 0) {
             seg_close(&seg);

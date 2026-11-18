@@ -30,6 +30,10 @@
 #    网页上的「是否开启脏污检测」按钮可随时开关：开启 = 每帧推理并叠加，
 #    画面变为并排「左原图 | 右检测图」，两半各用一个蓝框标出 640x384 检测范围；
 #    关闭 = 仅推流单幅原图（省 CPU/BPU）。
+#    开启时还会做脏污连通域分析：检测图上按类别色给每个连通域画包围盒
+#    （外圈黑边），/status.json 给出 n_region 和 regions[]（原图坐标+面积），
+#    网页状态栏显示「区域 N」。小于 STREAM_REGION_MIN_PX（默认 16 模型像素）
+#    的连通域当噪点丢掉。
 #    被判脏污的帧还会把「原图 | 掩码 | 叠加图」三联图存 JPG 到
 #    /userdata/iris/dirty_imgs，默认最多保留 100 张（超出删最旧）。
 #    对比图默认最多每 1 秒存一张（STREAM_SAVE_INTERVAL_MS，0 = 每脏污帧都存）：
@@ -120,6 +124,11 @@ fi
 # 脏污判定阈值（所有脏污类面积占比 %），默认用程序内置的 0.5%
 DIRTY_OPT=
 [ -n "${STREAM_DIRTY_RATIO:-}" ] && DIRTY_OPT="--dirty-ratio $STREAM_DIRTY_RATIO"
+
+# 连通域最小面积（模型像素），默认用程序内置的 16
+REGION_OPT=
+[ -n "${STREAM_REGION_MIN_PX:-}" ] &&
+    REGION_OPT="--region-min-px $STREAM_REGION_MIN_PX"
 
 # 脏污对比图（原图|可视化 并排）：默认 $BASE/dirty_imgs，最多 100 张
 SAVE_OPT=
@@ -256,7 +265,7 @@ if ! alive "$RUN/stream.pid"; then
     # 避免点「保存」时 q95 编码抢走推流线程的 CPU 造成画面卡顿
     nohup taskset -c 6,7 $BASE/bin/stream_server --watch "$TMP/$CH" --consume --purge \
         --port 8080 --pub-width "$PUB_W" --quality "$QUAL" --fps "$FPS" \
-        $INFER_OPT $DIRTY_OPT $SAVE_OPT $REC_OPT </dev/null >"$BASE/logs/stream.log" 2>&1 &
+        $INFER_OPT $DIRTY_OPT $REGION_OPT $SAVE_OPT $REC_OPT </dev/null >"$BASE/logs/stream.log" 2>&1 &
     echo $! >"$RUN/stream.pid"
 fi
 
