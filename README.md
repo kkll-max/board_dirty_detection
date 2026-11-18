@@ -1,6 +1,6 @@
 # board_dirty_detection — 镜面脏污检测（量化 + 板端）
 
-割草机镜头脏污检测的完整交付：BPU 6 类分割模型的量化工程（`lianghua/`），以及
+割草机镜头脏污检测的完整交付：BPU 6 类分割模型的量化工程（`05/`），以及
 goko（RDK X5，Buildroot 2022.08）上纯 C 的推流 / 检测 / 网页程序。
 
 板子是 Buildroot 2022.08，没有 Python / gcc / 包管理器。板端程序全部是交叉编译的
@@ -22,28 +22,30 @@ board_dirty_detection/
 │   ├── start.sh              板端一键启动
 │   └── stop.sh               板端一键停止
 ├── models/
-│   ├── model.bin             当前 6 类分割模型（04 版，md5 b1da867a…，2,230,242 B）
+│   ├── model.bin             当前 6 类分割模型（05 版，md5 835338e1…，2,361,314 B）
 │   └── labels.txt            clean / dirt_dot / glare / water / grass_residue / mud_film
 ├── bin/
 │   ├── stream_server         已交叉编译的 aarch64 产物
 │   └── min_dirty_infer       已交叉编译的 aarch64 产物
-├── lianghua/                 模型量化（详见 lianghua/README.md）
+├── 05/                       模型量化工程（makertbin 的输入与产物）
 │   ├── best.onnx  config.yaml  labels.txt
-│   ├── cal_img/  cal_raw/    校准图与 float32 校准数据
-│   ├── cal_img_to_raw.py     校准数据转换脚本
-│   ├── output/               量化产物（model.bin、quant_info、各阶段 onnx）
-│   └── hb_mapper_makertbin.log
+│   ├── cal_img/              校准图 194 张 PNG（98 MB）
+│   ├── cal_raw/              校准图对应的 float32 二进制（同名 .raw，546 MB，已随仓库提交）
+│   ├── output/               量化产物：model.bin、*_quant_info.json、各阶段 onnx、subgraph 图
+│   ├── .hb_check/            makertbin 的中间检查产物（27 MB，随仓库保留）
+│   └── hb_mapper_{checker,makertbin}.log
 └── README.md
 ```
 
 - 板端部署位置：`bin/*` → `/userdata/iris/bin/`，`models/*` → `/userdata/iris/models/`，
   `scripts/{start,stop}.sh` → `/userdata/iris/scripts/`；
-- 一键部署：`sh scripts/deploy.sh root@<板子IP>`（默认 `root@192.168.137.6`，
-  上传为 `*.new`、远端 md5 校验通过后才替换，只重启 `stream_server`）；
-  WSL 里没有板子网段路由时，用 `SSH=`/`SCP=` 环境变量指向 Windows OpenSSH
-  （示例见 `scripts/deploy.sh` 头部注释）；
-- 量化产物升级后：把 `lianghua/output/model.bin` 覆盖到 `models/model.bin`，
-  再跑 `deploy.sh` 同步到板端；
+- 一键部署：`sh scripts/deploy.sh root@<板子IP>`（脚本默认 `root@192.168.137.6`，
+  当前板子是 `root@10.0.0.23`；上传为 `*.new`、远端 md5 校验通过后才替换，
+  只重启 `stream_server`）；WSL 里没有板子网段路由、或私钥只在 Windows 上时，
+  用 `SSH=`/`SCP=` 环境变量指向 Windows OpenSSH（示例见 `scripts/deploy.sh`
+  头部注释）；
+- 量化产物升级后：把 `05/output/model.bin` 覆盖到 `models/model.bin`，再跑
+  `deploy.sh` 同步到板端（`deploy.sh` 会把模型一起上传）；
 - 仓库里的 `bin/*` 为已交叉编译的 aarch64 产物（板端现运行的版本即由本工程源码
   编译）。md5 会随编译时目录变化：stb 头文件断言把 `__FILE__` 绝对路径嵌入了
   二进制，功能不受影响。
@@ -61,16 +63,15 @@ bin/stream_server（交叉编译的 aarch64 纯 C） ─── dlopen libdnn.so 
 ## 快速上手
 
 ```sh
-# 1) 重新量化（可选，OE 容器）
-cd lianghua
-python3 cal_img_to_raw.py                    # cal_img -> cal_raw
+# 1) 重新量化（可选，OE 容器；cal_raw 已随仓库提供，直接喂给 makertbin）
+cd 05
 hb_mapper makertbin config.yaml --model-type onnx
 
 # 2) 交叉编译板端程序（OE 容器）
 cd ..
 sh scripts/build.sh                          # 产物在 bin/
 
-# 3) 部署到板子并重启推流（默认 root@192.168.137.6）
+# 3) 部署到板子并重启推流（默认 root@192.168.137.6，当前板子 10.0.0.23）
 sh scripts/deploy.sh root@<板子IP>
 ```
 
@@ -178,8 +179,9 @@ HTTP 接口：
 ## 模型与类别
 
 - 模型：6 类逐像素分割，输入 `1×3×384×640` RGB（板上 NV12），输出 `[1,384,640]`
-  UINT8 类别图，march `bayes-e`；当前为 04 版（`model.bin` 2,230,242 B，
-  md5 `b1da867a297f4b023babd29677c87530`）；
+  UINT8 类别图，march `bayes-e`；当前为 `05/` 量化版（`models/model.bin`
+  2,361,314 B，md5 `835338e138cd031896c6bef951999de5`，与 `05/output/model.bin`
+  一致；上一版 04 为 2,230,242 B，md5 `b1da867a…`）；
 - 类别：`clean`（不叠加）、`dirt_dot`（红褐 `#a52a2a`）、`glare`（明黄
   `#ffff00`）、`water`（蓝 `#0000ff`）、`grass_residue`（绿 `#00c800`）、
   `mud_film`（黄褐 `#b47828`）；
@@ -257,8 +259,10 @@ DIRTY/clean，以及分阶段耗时：
 并排图的 PNG 编码约 0.4 s/张，会明显拉高单图 total，纯推理统计可省略 `-o`。
 
 文件夹模式结束会打印各阶段平均值和「平均每图 total」。模型加载只做一次，
-单独显示为「一次性，不计入单图耗时」。板端实测 10 张 640×448 校准图平均
-约 38.8 ms/张（预处理 29.2 + 纯推理 7.2 + 后处理 1.2，不含写图）。
+单独显示为「一次性，不计入单图耗时」。板端实测（04 版模型，10 张 640×448
+校准图）平均约 38.8 ms/张（预处理 29.2 + 纯推理 7.2 + 后处理 1.2，不含写图）；
+`stream_server` 的 `/status.json` 里 `infer_ms`（04 版模型，含预处理、叠加和
+连通域）实测 12–22 ms：干净帧约 12 ms，13 个连通域的脏污帧约 18 ms。
 
 ## 重新编译
 
@@ -300,4 +304,25 @@ tail -f /userdata/iris/logs/stream.log
   （约 20 KB/帧），或调小 `STREAM_QUALITY` / `STREAM_FPS`，并确认板端 `iwconfig wlan0` 显示
   `Power Management:off`（`start.sh` 会自动关）；
 - `seq` 长时间不涨：多半是停得不久就重启，等 15 秒租约过期再启动；
-- 板端 libc 是 musl 或 < 2.34 时，用对应工具链改 `CROSS_CC` 重编。
+- 板端 libc 是 musl 或 < 2.34 时，用对应工具链改 `CROSS_CC` 重编；
+- 板子重启后**不会自动拉起任何服务**（连 `/goko` 的厂商节点也没有），要手动
+  `sh /userdata/iris/scripts/start.sh`；
+- 远程 `pkill -f stream_server` 会把 ssh 连接一起打断（返回 255、无输出）：
+  `pkill -f` 会匹配到 sshd 拉起的 `bash -c '...'` 包装进程，它的命令行里
+  正好含这个字符串。改用 `pkill -x stream_server`；临时实例
+  `stream_server.new` 的进程名被截成 15 字符，是 `stream_server.n`；
+- 手动跑临时实例自测时（换端口/换输入目录）要自己带库路径，否则报
+  `libcnn_intf.so.1: cannot open shared object file`：
+
+```sh
+export LD_LIBRARY_PATH=/goko/lib:/app/lib:/app/pub/lib:/middleware/lib:/middleware/pub/lib:/usr/hobot/lib:/usr/hobot/lib/sensor:/system/lib:/system/usr/lib:/lib
+cd /userdata/iris
+nohup taskset -c 5,7 ./bin/stream_server --watch temp/cctest --port 8082 \
+    --model models/model.bin --labels models/labels.txt --save-max 0 \
+    </dev/null >logs/cctest.log 2>&1 &
+# 往 temp/cctest 丢一张 640x448 PNG，再读 http://127.0.0.1:8082/status.json
+# 看 n_region/regions，抓 /snapshot.jpg 核对框的位置和颜色
+```
+
+  临时实例不要加 `--consume`，否则会把自测图片删掉；也不要和 8080 的正式
+  实例用同一个 watch 目录。
