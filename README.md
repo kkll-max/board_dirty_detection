@@ -1,9 +1,6 @@
 # board_dirty_detection — 镜面脏污检测（量化 + 板端）
 
-割草机镜头脏污检测的完整交付：BPU 6 类分割模型的量化工程（`05/`），以及
-goko（RDK X5，Buildroot 2022.08）上的推流 / 检测 / 网页程序。
-
-图片编解码用 stb，推理走板端 `/usr/lib/libdnn.so`（hbDNN C API）
+割草机镜头脏污检测的完整交付：BPU 6 类分割模型的量化工程（`05/`），以及板上的推流 / 检测 / 网页程序。
 
 ## 目录
 
@@ -35,19 +32,7 @@ board_dirty_detection/
 └── README.md
 ```
 
-- 板端部署位置：`bin/*` → `/userdata/iris/bin/`，`models/*` → `/userdata/iris/models/`，
-  `scripts/{start,stop}.sh` → `/userdata/iris/scripts/`；
-- 一键部署：`sh scripts/deploy.sh root@<板子IP>`（脚本默认 `root@192.168.137.6`，
-  当前板子是 `root@10.0.0.23`；上传为 `*.new`、远端 md5 校验通过后才替换，
-  只重启 `stream_server`）；WSL 里没有板子网段路由、或私钥只在 Windows 上时，
-  用 `SSH=`/`SCP=` 环境变量指向 Windows OpenSSH（示例见 `scripts/deploy.sh`
-  头部注释）；
-- 量化产物升级后：把 `05/output/model.bin` 覆盖到 `models/model.bin`，再跑
-  `deploy.sh` 同步到板端（`deploy.sh` 会把模型一起上传）；
-- 仓库里的 `bin/*` 为已交叉编译的 aarch64 产物（板端现运行的版本即由本工程源码
-  编译）。md5 会随编译时目录变化：stb 头文件断言把 `__FILE__` 绝对路径嵌入了
-  二进制，功能不受影响。
-
+- 板端部署位置：`/userdata/iris
 ## 管线一览
 
 ```text
@@ -61,15 +46,15 @@ bin/stream_server（交叉编译的 aarch64 纯 C） ─── dlopen libdnn.so 
 ## 快速上手
 
 ```sh
-# 1) 重新量化（可选，OE 容器；cal_raw 已随仓库提供，直接喂给 makertbin）
+# 1) 重新量化（docker工具链）
 cd 05
 hb_mapper makertbin config.yaml --model-type onnx
 
-# 2) 交叉编译板端程序（OE 容器）
+# 2) 交叉编译板端程序（docker工具链）
 cd ..
-sh scripts/build.sh                          # 产物在 bin/
+sh scripts/build.sh                        
 
-# 3) 部署到板子并重启推流（默认 root@192.168.137.6，当前板子 10.0.0.23）
+# 3) 部署到板子并重启推流
 sh scripts/deploy.sh root@<板子IP>
 ```
 
@@ -121,7 +106,7 @@ bin/stream_server --watch temp/stereo_left --consume --purge --port 8080 \
 pid 在 `run/*.pid`。停止后不要立刻重启：Cyber 订阅者租约 12 秒，`start.sh` 会
 自动等待并打印 `等待旧订阅者租约过期 Ns ...`，属正常现象。
 
-### 常用环境变量（不改脚本即可调整）
+### 常用环境变量
 
 | 变量 | 作用 |
 | --- | --- |
@@ -198,18 +183,6 @@ HTTP 接口：
 连通域会画在叠加图（检测图）上，因此所有叠加可视化——网页右半图、`dirty_imgs/`
 三联图的 overlay 面板、`-a/-b` 录制的 `det_*.jpg`——都自动带框。
 
-## 落盘规则
-
-- `temp/` 是 tmpfs，`stream_server` 用 `--consume` 推完即删，重启自动清空；
-- `dirty_imgs/` 只存被判脏污的帧，滚动上限 100 张（`--save-max`），默认
-  最多每 1 秒存一张（`--save-interval` / `STREAM_SAVE_INTERVAL_MS`）；脏污持续
-  时逐帧保存会让三联图编码 + eMMC 写入占满 CPU，推流掉帧、网页延迟变大；
-- `data_get/` 只在网页点「保存」时写；
-- `on_time/` 仅在 `STREAM_RECORD=a/b` 时创建，滚动保留 N 帧；
-- 所有运行日志统一在 `logs/`：`stream.log`、`sub_img.log` 每次启动覆盖，
-  `sub_img_imu.log.INFO.*`（glog）只保留最新 `LOG_KEEP`（默认 5）个，
-  有新的就删最旧的；
-- 其余推理过程不落盘。
 
 ## 耗时统计（在板子上跑）
 
@@ -231,14 +204,6 @@ HTTP 接口：
 /userdata/iris/bin/min_dirty_infer -m /path/model.bin -l /path/labels.txt -i /path/图片
 ```
 
-输入图片要求：**高 448**（双目左目原图，自动上下各裁 32 行）或 **高 384**
-（已是模型输入尺寸，不裁行），**宽 ≥ 640 且多出的列数为偶数**，不做缩放。
-尺寸不符的图片会被逐张打印「警告: 跳过…」并不计入耗时；如果目录里一张都
-处理不了，只会看到警告，不会打印耗时统计。
-
-每张图打印：各类占比（类名来自 labels.txt）、`fg(class1..5)` 合计与
-DIRTY/clean，以及分阶段耗时：
-
 ```text
 预处理 = 解码 + 裁剪 + RGB→NV12
 纯推理 = hbDNNInfer 提交 + WaitTaskDone
@@ -246,71 +211,4 @@ DIRTY/clean，以及分阶段耗时：
 单列   = 输入拷贝+flush、叠加、拼图（左原图+右叠加横向拼接）、PNG 编码、写盘
 ```
 
-`-o` 输出的是「左原图 | 右可视化」并排 PNG（宽度为原图 2 倍，640×448 输入
-得到 1280×448）；单图输入时 `-o` 就是文件路径，目录输入时作为输出目录。
-并排图的 PNG 编码约 0.4 s/张，会明显拉高单图 total，纯推理统计可省略 `-o`。
 
-文件夹模式结束会打印各阶段平均值和「平均每图 total」。模型加载只做一次，
-单独显示为「一次性，不计入单图耗时」。板端实测（04 版模型，10 张 640×448
-校准图）平均约 38.8 ms/张（预处理 29.2 + 纯推理 7.2 + 后处理 1.2，不含写图）；
-`stream_server` 的 `/status.json` 里 `infer_ms`（04 版模型，含预处理、叠加和
-连通域）实测 12–22 ms：干净帧约 12 ms，13 个连通域的脏污帧约 18 ms。
-
-## 重新编译
-
-在 OE 容器 `openexplorer/ai_toolchain_ubuntu_20_x5_gpu:v1.2.8-py310` 里：
-
-```sh
-cd /open_explorer/dirty1109/board_dirty_detection
-sh scripts/build.sh       # 自动找交叉编译器，make 出 bin/ 下两个程序
-# 等价于:
-make CROSS_CC=/opt/arm-gnu-toolchain-11.3.rel1-x86_64-aarch64-none-linux-gnu/bin/aarch64-none-linux-gnu-gcc
-make clean                # 清理产物
-```
-
-产物只依赖 `libc`/`libm`（GLIBC ≤ 2.34）。部署用
-`sh scripts/deploy.sh root@<板子IP>`：先上传 `*.new`、远端 md5 校验，再停
-`stream_server`、替换、执行 `start.sh`（`sub_img_imu` 不受影响）。
-
-## 运行环境与链路
-
-- 板子：RDK X5 / `goko`，Buildroot 2022.08，自带 `/usr/lib/libdnn.so`；
-- 推流链路：板子走 2.4G Wi-Fi，客户端互传有效吞吐约 130 KB/s。并排原图
-  1282×448@q70 每帧约 90 KB，链路送不完会积压；网页「推流宽度」缩到 640
-  宽约 20 KB/帧（编码耗时也从 ~50 ms 降到 ~13 ms）。
-
-## 排查
-
-```sh
-/lib/libc.so.6 | head -1    # 期望 glibc ≥ 2.34
-ls /usr/lib | grep -E 'libdnn|libhbrt|libcnn_intf|libhbmem|libalog|libstdc'
-tail -f /userdata/iris/logs/stream.log
-```
-
-- `无法加载 libdnn.so`：确认上面依赖齐全，程序会自动预加载 `/usr/hobot/lib`
-  下的 `libalog → libhbmem → libcnn_intf`；
-- 网页延迟大 / 掉帧：先看 `logs/stream.log` 里每 10 秒一行的
-  `每帧耗时(ms): 解码 | 检测 | 推流编码 | 存图`，哪一项大就先削哪一项
-  （脏污持续时把 `STREAM_SAVE_INTERVAL_MS` 调大最有效）；如果板端算得过来、
-  但网页仍延迟，就是 Wi-Fi 链路问题：在网页「推流宽度」下拉框缩到 640
-  （约 20 KB/帧），或调小 `STREAM_QUALITY` / `STREAM_FPS`，并确认板端 `iwconfig wlan0` 显示
-  `Power Management:off`（`start.sh` 会自动关）；
-- `seq` 长时间不涨：多半是停得不久就重启，等 15 秒租约过期再启动；
-- 板端 libc 是 musl 或 < 2.34 时，用对应工具链改 `CROSS_CC` 重编；
-- 板子重启后**不会自动拉起任何服务**（连 `/goko` 的厂商节点也没有），要手动
-  `sh /userdata/iris/scripts/start.sh`；
-- 远程 `pkill -f stream_server` 会把 ssh 连接一起打断（返回 255、无输出）：
-  `pkill -f` 会匹配到 sshd 拉起的 `bash -c '...'` 包装进程，它的命令行里
-  正好含这个字符串。改用 `pkill -x stream_server`；临时实例
-  `stream_server.new` 的进程名被截成 15 字符，是 `stream_server.n`；
-- 手动跑临时实例自测时（换端口/换输入目录）要自己带库路径，否则报
-  `libcnn_intf.so.1: cannot open shared object file`：
-
-```sh
-export LD_LIBRARY_PATH=/goko/lib:/app/lib:/app/pub/lib:/middleware/lib:/middleware/pub/lib:/usr/hobot/lib:/usr/hobot/lib/sensor:/system/lib:/system/usr/lib:/lib
-cd /userdata/iris
-nohup taskset -c 5,7 ./bin/stream_server --watch temp/cctest --port 8082 \
-    --model models/model.bin --labels models/labels.txt --save-max 0 \
-    </dev/null >logs/cctest.log 2>&1 &
-
-```
